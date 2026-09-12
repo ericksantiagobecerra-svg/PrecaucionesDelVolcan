@@ -1,0 +1,853 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Trivia Prevención Puracé — Kunchikuya</title>
+<link href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;600;800&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --bg-oscuro: #0f100d;
+    --bg-gradiente: radial-gradient(circle at top center, #26120b 0%, #0f100d 75%);
+    --tarjeta-bg: rgba(28, 30, 25, 0.75);
+    --tarjeta-border: rgba(255, 255, 255, 0.12);
+    
+    --primario: #FF5722;
+    --primario-hover: #ff7043;
+    --primario-glow: rgba(255, 87, 34, 0.45);
+    
+    --correcto: #2E7D32;
+    --correcto-bg: rgba(46, 125, 50, 0.25);
+    
+    --incorrecto: #C62828;
+    --incorrecto-bg: rgba(198, 40, 40, 0.25);
+    
+    --alerta: #FFB300;
+    --texto: #F5F2EB;
+    --texto-dim: #B3ADA0;
+    
+    --radius: 20px;
+    --font-main: 'Poppins', sans-serif;
+  }
+
+  * { box-sizing: border-box; }
+
+  body {
+    margin: 0;
+    min-height: 100vh;
+    background: var(--bg-oscuro);
+    background-image: var(--bg-gradiente);
+    font-family: var(--font-main);
+    color: var(--texto);
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    padding: 20px;
+    overflow-x: hidden;
+  }
+
+  /* Lienzos de fondo (Ceniza, Magma y Confeti) */
+  #canvas-ceniza, #canvas-confeti, #canvas-magma {
+    position: fixed; inset: 0; pointer-events: none;
+  }
+  #canvas-ceniza { z-index: 0; opacity: 0.55; }
+  #canvas-magma { z-index: 1; }
+  #canvas-confeti { z-index: 100; }
+
+  .juego {
+    width: 100%;
+    max-width: 620px;
+    position: relative;
+    z-index: 10;
+  }
+
+  .cabecera { text-align: center; margin-bottom: 20px; position: relative; }
+  
+  .btn-sonido {
+    position: absolute; top: 0; right: 0;
+    background: rgba(255, 255, 255, 0.1);
+    backdrop-filter: blur(8px);
+    border: 1px solid var(--tarjeta-border);
+    color: var(--texto); border-radius: 50%; width: 44px; height: 44px;
+    cursor: pointer; font-size: 1.2rem;
+    transition: all 0.3s ease;
+    display: flex; justify-content: center; align-items: center;
+  }
+  .btn-sonido:hover { background: rgba(255, 255, 255, 0.2); transform: scale(1.1); }
+
+  .volcan-container {
+    width: 160px; height: 160px;
+    margin: 0 auto 12px;
+    display: flex; align-items: center; justify-content: center;
+    position: relative;
+    filter: drop-shadow(0 12px 20px rgba(255, 87, 34, 0.3));
+    transition: transform 0.5s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+  }
+  .volcan-container.sacudir-fuerte {
+    animation: sacudirVolcan 0.5s ease infinite;
+  }
+  @keyframes sacudirVolcan {
+    0%, 100% { transform: translateY(0) rotate(0deg); }
+    25% { transform: translateY(-8px) rotate(-3deg) scale(1.05); }
+    75% { transform: translateY(8px) rotate(3deg) scale(1.05); }
+  }
+
+  .volcan-svg { width: 100%; height: 100%; overflow: visible; }
+  
+  .humo { animation: subirHumo 3s ease-in-out infinite; transform-origin: center bottom; opacity: 0; }
+  .humo1 { animation-delay: 0s; } .humo2 { animation-delay: 1s; } .humo3 { animation-delay: 2s; }
+  
+  @keyframes subirHumo {
+    0% { transform: translateY(10px) scale(0.4); opacity: 0; }
+    30% { opacity: 0.7; }
+    100% { transform: translateY(-45px) scale(1.6); opacity: 0; }
+  }
+
+  .lava-crater {
+    transition: fill 0.3s ease, filter 0.3s ease;
+    animation: pulsoLava 2s alternate infinite;
+  }
+  @keyframes pulsoLava {
+    0% { fill: #d84315; filter: drop-shadow(0 0 3px #ff5722); }
+    100% { fill: #ff7043; filter: drop-shadow(0 0 14px #ff5722); }
+  }
+  .volcan-container.erupcion .lava-crater {
+    fill: #ffea00 !important;
+    filter: drop-shadow(0 0 25px #ffea00) drop-shadow(0 0 50px #ff5722) !important;
+  }
+
+  h1 { font-size: 1.6rem; font-weight: 800; line-height: 1.25; margin: 0 0 6px; text-shadow: 0 2px 10px rgba(0,0,0,0.6); }
+  .subtitulo { color: var(--primario); font-size: 0.95rem; font-weight: 600; margin: 0; letter-spacing: 1.2px; text-transform: uppercase; }
+
+  .marcador {
+    display: flex; justify-content: space-between; align-items: center;
+    margin: 20px 0 15px; font-size: 1rem; font-weight: 600;
+    background: rgba(0,0,0,0.4); padding: 12px 22px; border-radius: 50px;
+    border: 1px solid var(--tarjeta-border);
+    backdrop-filter: blur(10px);
+  }
+  
+  .racha { color: var(--alerta); display: flex; align-items: center; gap: 6px; }
+  .puntaje-texto { color: var(--primario); }
+  
+  .llama { display: inline-block; transition: transform 0.2s ease; }
+  .llama.pop { animation: popLlama 0.4s ease forwards; }
+  @keyframes popLlama { 0% { transform: scale(1); } 50% { transform: scale(1.5) rotate(12deg); filter: drop-shadow(0 0 12px var(--alerta)); } 100% { transform: scale(1); } }
+
+  .corazon { display: inline-block; font-size: 1.1rem; }
+  .corazon.perdido { animation: perderVida 0.5s forwards; filter: grayscale(100%); }
+  @keyframes perderVida { 0% { transform: scale(1.3); } 100% { transform: scale(0.7); opacity: 0.4; } }
+
+  .puntos-progreso { display: flex; gap: 8px; justify-content: center; margin-bottom: 20px; flex-wrap: wrap; }
+  .punto {
+    width: 12px; height: 12px; border-radius: 50%;
+    background: rgba(255,255,255,0.1); border: 2px solid transparent;
+    transition: all 0.3s ease;
+  }
+  .punto.actual { background: transparent; border-color: var(--primario); box-shadow: 0 0 12px var(--primario-glow); transform: scale(1.25); }
+  .punto.correcta { background: var(--correcto); box-shadow: 0 0 10px var(--correcto); }
+  .punto.incorrecta { background: var(--incorrecto); }
+
+  .barra-tiempo {
+    height: 9px; border-radius: 12px; background: rgba(0,0,0,0.5); overflow: hidden; margin-bottom: 25px;
+    box-shadow: inset 0 2px 6px rgba(0,0,0,0.4);
+    border: 1px solid var(--tarjeta-border);
+  }
+  .barra-tiempo-interna {
+    height: 100%; width: 100%;
+    background: #43A047;
+    box-shadow: 0 0 12px rgba(67, 160, 71, 0.6);
+    transition: width 0.1s linear, background 0.3s ease, box-shadow 0.3s ease;
+  }
+  .barra-tiempo-interna.media { background: var(--alerta); box-shadow: 0 0 12px rgba(255, 179, 0, 0.6); }
+  .barra-tiempo-interna.critica { background: var(--incorrecto); box-shadow: 0 0 12px rgba(198, 40, 40, 0.8); animation: parpadeo 0.8s infinite; }
+  @keyframes parpadeo { 0%, 100% { opacity: 1; } 50% { opacity: 0.4; } }
+
+  .tarjeta {
+    background: var(--tarjeta-bg);
+    backdrop-filter: blur(16px);
+    -webkit-backdrop-filter: blur(16px);
+    border: 1px solid var(--tarjeta-border);
+    border-radius: var(--radius);
+    padding: 32px;
+    box-shadow: 0 25px 60px rgba(0,0,0,0.6);
+    transition: transform 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275), opacity 0.3s ease;
+  }
+  .tarjeta.oculto-animado { transform: scale(0.9) translateY(20px); opacity: 0; pointer-events: none; }
+  .tarjeta.temblor { animation: temblor 0.4s ease; }
+  @keyframes temblor {
+    0%, 100% { transform: translateX(0); }
+    20%, 60% { transform: translateX(-12px) rotate(-1.5deg); }
+    40%, 80% { transform: translateX(12px) rotate(1.5deg); }
+  }
+
+  .pregunta-numero { color: var(--texto-dim); font-size: 0.85rem; font-weight: 600; text-transform: uppercase; letter-spacing: 1.5px; margin-bottom: 12px; }
+  .pregunta-texto { font-size: 1.3rem; font-weight: 600; line-height: 1.55; margin: 0 0 25px; }
+
+  .opciones { display: flex; flex-direction: column; gap: 14px; }
+  .opcion {
+    text-align: left; background: rgba(0,0,0,0.45);
+    border: 2px solid transparent; color: var(--texto);
+    padding: 16px 22px; border-radius: 14px; font-size: 1.02rem; cursor: pointer;
+    font-family: inherit; font-weight: 600;
+    transition: all 0.25s ease;
+    display: flex; align-items: center;
+  }
+  .opcion:hover:not(:disabled) { 
+    background: rgba(255, 255, 255, 0.07); 
+    border-color: var(--primario);
+    transform: translateY(-3px);
+    box-shadow: 0 8px 20px rgba(0,0,0,0.4);
+  }
+  .opcion:active:not(:disabled) { transform: translateY(0); }
+  .opcion:disabled { cursor: default; opacity: 0.9; }
+  
+  .opcion.correcta { 
+    background: var(--correcto-bg); 
+    border-color: #43A047; 
+    animation: popLlama 0.3s ease; 
+    box-shadow: 0 0 20px rgba(67, 160, 71, 0.4);
+  }
+  .opcion.incorrecta { 
+    background: var(--incorrecto-bg); 
+    border-color: var(--incorrecto); 
+    box-shadow: 0 0 20px rgba(198, 40, 40, 0.4);
+  }
+
+  .retro { 
+    margin-top: 22px; padding: 16px; border-radius: 14px; font-size: 0.98rem; 
+    line-height: 1.55; display: none; font-weight: 600;
+  }
+  .retro.mostrar { display: block; animation: deslizarArriba 0.3s ease; }
+  @keyframes deslizarArriba { from { opacity: 0; transform: translateY(12px); } to { opacity: 1; transform: translateY(0); } }
+  
+  .retro.ok { background: var(--correcto-bg); color: #81C784; border: 1px solid rgba(67, 160, 71, 0.35); }
+  .retro.mal { background: var(--incorrecto-bg); color: #EF5350; border: 1px solid rgba(198, 40, 40, 0.35); }
+  .retro.tiempo { background: rgba(255, 179, 0, 0.15); color: var(--alerta); border: 1px solid rgba(255, 179, 0, 0.35); }
+
+  .bono-racha { display: inline-block; margin-left: 8px; color: var(--alerta); font-weight: 800; text-shadow: 0 0 8px rgba(255,179,0,0.6); }
+
+  .btn-principal {
+    margin-top: 24px; width: 100%; padding: 18px; border: none; border-radius: 14px;
+    background: linear-gradient(135deg, var(--primario), #e64a19);
+    color: #fff; font-weight: 800; font-size: 1.1rem; font-family: inherit;
+    cursor: pointer; text-transform: uppercase; letter-spacing: 1.2px;
+    box-shadow: 0 6px 20px var(--primario-glow);
+    transition: all 0.25s ease;
+    display: none;
+  }
+  .btn-principal.mostrar { display: block; animation: deslizarArriba 0.3s ease; }
+  .btn-principal:hover { filter: brightness(1.1); transform: translateY(-2px); box-shadow: 0 10px 25px rgba(255, 87, 34, 0.65); }
+  .btn-principal:active { transform: translateY(0); }
+
+  .pantalla-final { text-align: center; }
+  .emoji-final { font-size: 4.5rem; display: block; margin-bottom: 12px; animation: flotar 3s ease-in-out infinite; }
+  @keyframes flotar { 0%, 100% { transform: translateY(0); } 50% { transform: translateY(-12px); } }
+  
+  .pantalla-final h2 { margin: 0 0 10px; font-size: 1.9rem; font-weight: 800; color: #fff; }
+  .pantalla-final p { color: var(--texto-dim); line-height: 1.65; font-size: 1.05rem; margin-bottom: 25px; }
+  
+  .stats-final { display: flex; justify-content: center; gap: 15px; margin: 25px 0; flex-wrap: wrap; }
+  .stat-caja {
+    background: rgba(0,0,0,0.4); padding: 18px 22px; border-radius: 16px;
+    border: 1px solid var(--tarjeta-border); min-width: 130px; flex: 1;
+    backdrop-filter: blur(10px);
+  }
+  .stat-caja span.etiqueta { display: block; font-size: 0.8rem; color: var(--texto-dim); text-transform: uppercase; margin-bottom: 6px; letter-spacing: 1px; }
+  .stat-caja span.valor { font-size: 2rem; font-weight: 800; color: var(--primario); }
+  .stat-caja.racha span.valor { color: var(--alerta); }
+  .stat-caja.correctas span.valor { color: #81C784; }
+
+  .oculto { display: none !important; }
+
+  footer { text-align: center; margin-top: 35px; font-size: 0.82rem; color: var(--texto-dim); opacity: 0.7; z-index: 10; position: relative; }
+
+  @media (max-width: 480px) {
+    .tarjeta { padding: 22px; }
+    h1 { font-size: 1.35rem; }
+    .volcan-container { width: 130px; height: 130px; }
+    .stats-final { gap: 10px; }
+    .stat-caja { min-width: 100px; padding: 12px; }
+    .stat-caja span.valor { font-size: 1.6rem; }
+  }
+</style>
+</head>
+<body>
+
+<canvas id="canvas-ceniza"></canvas>
+<canvas id="canvas-magma"></canvas>
+<canvas id="canvas-confeti"></canvas>
+
+<div class="juego">
+
+  <div class="cabecera">
+    <button class="btn-sonido" id="btn-sonido" title="Silenciar sonido">🔊</button>
+    <div class="volcan-container" id="volcan-container">
+      <svg class="volcan-svg" viewBox="0 0 200 160" xmlns="http://www.w3.org/2000/svg">
+        <defs>
+          <linearGradient id="gradVolcan" x1="0%" y1="0%" x2="0%" y2="100%">
+            <stop offset="0%" stop-color="#5a5d52"/>
+            <stop offset="100%" stop-color="#1c1e19"/>
+          </linearGradient>
+          <filter id="resplandor" x="-30%" y="-30%" width="160%" height="160%">
+            <feGaussianBlur stdDeviation="5" result="blur" />
+            <feComposite in="SourceGraphic" in2="blur" operator="over" />
+          </filter>
+        </defs>
+        <!-- Cuerpo del volcán -->
+        <path d="M 15,155 L 75,45 C 82,32 94,32 102,45 L 185,155 Z" fill="url(#gradVolcan)"/>
+        <!-- Grietas de magma en la ladera -->
+        <path d="M 90,80 L 85,110 L 92,130" stroke="#ff5722" stroke-width="2.5" fill="none" opacity="0.7"/>
+        <path d="M 115,75 L 122,100 L 110,125" stroke="#ff7043" stroke-width="2" fill="none" opacity="0.6"/>
+        <!-- Cráter y Lava incandescente -->
+        <path d="M 72,52 L 82,36 C 88,27 100,27 106,36 L 118,52 C 105,62 85,62 72,52 Z" class="lava-crater" filter="url(#resplandor)"/>
+        <path d="M 90,38 L 95,68 L 102,40 Z" fill="#ff7043" opacity="0.9"/>
+        <!-- Humo volcánico -->
+        <circle class="humo humo1" cx="95" cy="18" r="16" fill="#A9A499" />
+        <circle class="humo humo2" cx="78" cy="8" r="20" fill="#8c887e" />
+        <circle class="humo humo3" cx="112" cy="4" r="22" fill="#6d6a63" />
+      </svg>
+    </div>
+    <h1>Trivia Prevención Volcánica</h1>
+    <p class="subtitulo">Puracé · Kunchikuya · Alerta Naranja</p>
+  </div>
+
+  <div id="pantalla-juego">
+    <div class="marcador">
+      <div class="puntaje-texto">⭐ Puntos: <span id="puntaje">0</span></div>
+      <div class="racha" id="racha-container">🔥 <span id="racha">0</span></div>
+      <div class="vidas" id="vidas">❤️❤️❤️</div>
+    </div>
+
+    <div class="puntos-progreso" id="puntos-progreso"></div>
+
+    <div class="barra-tiempo"><div class="barra-tiempo-interna" id="barra-tiempo"></div></div>
+
+    <div class="tarjeta" id="tarjeta">
+      <div class="pregunta-numero" id="numero-pregunta">Pregunta 1/10</div>
+      <p class="pregunta-texto" id="texto-pregunta"></p>
+      <div class="opciones" id="opciones"></div>
+      <div class="retro" id="retro"></div>
+      <button class="btn-principal" id="btn-siguiente">Siguiente pregunta</button>
+    </div>
+  </div>
+
+  <div id="pantalla-final" class="pantalla-final tarjeta oculto">
+    <span class="emoji-final" id="emoji-final">🎉</span>
+    <h2 id="titulo-final"></h2>
+    <p id="mensaje-final"></p>
+    <div class="stats-final">
+      <div class="stat-caja correctas">
+        <span class="etiqueta">Correctas</span>
+        <span class="valor" id="fin-correctas">0</span>
+      </div>
+      <div class="stat-caja racha">
+        <span class="etiqueta">Mejor Racha</span>
+        <span class="valor" id="fin-racha">0</span>
+      </div>
+      <div class="stat-caja">
+        <span class="etiqueta">Puntaje</span>
+        <span class="valor" id="fin-puntaje">0</span>
+      </div>
+    </div>
+    <button class="btn-principal mostrar" id="btn-reiniciar" style="margin-top: 10px;">Jugar de nuevo</button>
+  </div>
+
+  <footer>I.E. Manuel María Mosquera · Grado 10° · Educación Propia</footer>
+</div>
+
+<script>
+  const BANCO_PREGUNTAS = [
+    { texto: "¿Qué significa que el Volcán Puracé esté en Alerta Naranja?",
+      opciones: ["El volcán ya hizo erupción y todo terminó", "Aumentó la actividad y hay probabilidad de erupción en días o semanas", "No existe ningún riesgo para la comunidad"],
+      correcta: 1,
+      explicacion: "La Alerta Naranja indica cambios importantes: hay que estar preparados, pero no significa que ya ocurrió la erupción." },
+    { texto: "¿Qué debe llevar esencialmente la mochila de vida (kit de emergencia)?",
+      opciones: ["Juguetes, maquillaje y dulces", "Agua, linterna, botiquín y documentos", "Solo el celular y el cargador"],
+      correcta: 1,
+      explicacion: "El kit debe tener elementos para la supervivencia: agua, botiquín, documentos en bolsa sellada y abrigo." },
+    { texto: "Si se activa la orden de evacuación, ¿qué debes hacer primero?",
+      opciones: ["Correr sin rumbo fijo o esconderte", "Grabar video para redes sociales", "Mantener la calma y dirigirte por la ruta de evacuación"],
+      correcta: 2,
+      explicacion: "La calma y seguir la ruta preestablecida evitan accidentes y aseguran que llegues al punto seguro." },
+    { texto: "¿Qué es un 'Punto de Encuentro' comunitario?",
+      opciones: ["Un lugar seguro y definido donde se reúne la comunidad tras evacuar", "La zona más cercana al cráter del volcán", "Cualquier parque de una ciudad lejana"],
+      correcta: 0,
+      explicacion: "Es un sitio seguro, acordado previamente por las autoridades indígenas y de socorro, para verificar que todos estén a salvo." },
+    { texto: "¿Cómo se llama el Volcán Puracé en la lengua propia mencionada en el resguardo?",
+      opciones: ["Tungurahua", "Kunchikuya", "Galeras"],
+      correcta: 1,
+      explicacion: "Kunchikuya es el nombre ancestral con el que la comunidad reconoce y respeta a su volcán." },
+    { texto: "Frente a la amenaza volcánica, los saberes ancestrales sirven para:",
+      opciones: ["Reemplazar por completo a las sirenas", "Ignorar el riesgo del volcán", "Fortalecer la prevención y el cuidado colectivo del territorio junto a la ciencia"],
+      correcta: 2,
+      explicacion: "La unión del conocimiento técnico-científico (SGC) con la sabiduría propia fortalece a toda la comunidad." },
+    { texto: "Si estás al aire libre y empieza a caer ceniza volcánica abundante, debes:",
+      opciones: ["Quedarte observando hacia arriba", "Cubrir tu nariz y boca, y buscar refugio bajo techo", "Correr desesperadamente"],
+      correcta: 1,
+      explicacion: "La ceniza es roca pulverizada y vidrio; respirarla daña los pulmones y los ojos. Debes protegerte inmediatamente." },
+    { texto: "¿Por qué se deben guardar copias de documentos de identidad en el kit?",
+      opciones: ["Para facilitar la identificación y censos en los refugios", "Para hacer tareas del colegio", "Para que no se mojen si llueve, aunque no sirvan"],
+      correcta: 0,
+      explicacion: "En caso de emergencia, estar identificado ayuda a que las autoridades de salud y del resguardo organicen la asistencia." },
+    { texto: "El objetivo principal de la Gestión del Riesgo en el Resguardo es:",
+      opciones: ["Detener mágicamente la actividad del volcán", "Proteger la vida, la familia y el territorio de la comunidad", "Construir muros alrededor del volcán"],
+      correcta: 1,
+      explicacion: "No podemos detener al volcán, pero sí podemos organizarnos para salvaguardar la vida y nuestros animales." },
+    { texto: "Si ves a un abuelo o vecino que no conoce la ruta de evacuación, tú debes:",
+      opciones: ["Dejarlo solo porque retrasa el paso", "Guiarlo, ayudarlo y compartir la información de prevención", "Asumir que la Guardia Indígena lo encontrará"],
+      correcta: 1,
+      explicacion: "La prevención es comunitaria. Ayudar a los más vulnerables (niños, ancianos) es vital en el resguardo." },
+    { texto: "¿Qué debes hacer para proteger las fuentes de agua y acueductos en casa ante la ceniza?",
+      opciones: ["Dejarlas descubiertas para que la ceniza las purifique", "Cubrir tanques y recipientes de agua herméticamente", "Hervir el agua con ceniza antes de tomarla"],
+      correcta: 1,
+      explicacion: "La ceniza volcánica contamina el agua, haciéndola tóxica. Tapar los tanques es la medida preventiva más importante." },
+    { texto: "¿Qué precaución se debe tener con los animales y mascotas (perros, vacas, caballos)?",
+      opciones: ["Resguardarlos bajo techo y proteger sus fuentes de agua y comida", "Dejarlos sueltos para que escapen solos", "No hacer nada, ellos sobreviven solos"],
+      correcta: 0,
+      explicacion: "Los animales también sufren por la ceniza y los gases. Hay que asegurarles refugio, agua limpia y forraje cubierto." },
+    { texto: "Si estás dentro de casa y la caída de ceniza es fuerte, ¿qué haces con las ventanas?",
+      opciones: ["Abrirlas para ventilar la casa", "Cerrarlas y sellar las rendijas con trapos húmedos", "Romperlas para salir rápido"],
+      correcta: 1,
+      explicacion: "Los trapos húmedos en rendijas evitan que el polvo volcánico fino ingrese al hogar y afecte la respiración." },
+    { texto: "¿Cuál de estas NO es una señal de advertencia de la actividad del volcán?",
+      opciones: ["Sismos o temblores frecuentes", "Fuerte olor a azufre (huevo podrido)", "Cielo totalmente despejado y soleado"],
+      correcta: 2,
+      explicacion: "Un día soleado no indica actividad volcánica. Los sismos, ruidos subterráneos y olores son señales reales de alerta." },
+    { texto: "¿Qué rol cumple la Guardia Indígena y autoridades del Resguardo en la alerta?",
+      opciones: ["Ninguno, solo observan", "Organizan, orientan a la comunidad y coordinan protocolos de evacuación", "Se encargan de apagar el volcán"],
+      correcta: 1,
+      explicacion: "La Guardia y autoridades son clave para liderar el plan de contingencia y mantener el orden y la seguridad." },
+    { texto: "¿Por qué es vital informarse SOLO por canales oficiales (Radio local, SGC, Cabildo)?",
+      opciones: ["Porque internet siempre se cae", "Para evitar rumores de redes sociales que generan pánico falso", "Porque solo ellos saben usar teléfonos"],
+      correcta: 1,
+      explicacion: "En emergencias abunda la desinformación. Los canales oficiales evitan decisiones equivocadas motivadas por el miedo." },
+    { texto: "¿Qué tipo de ropa es más recomendable llevar puesta en una evacuación volcánica?",
+      opciones: ["Pantalón corto, sandalias y camiseta de tirantes", "Pantalón largo, camisa de manga larga, zapatos cerrados o botas y sombrero", "Vestido de fiesta o ropa elegante"],
+      correcta: 1,
+      explicacion: "La ropa larga y cerrada protege la piel de quemaduras solares, raspones, caída de ceniza fría o fragmentos calientes." },
+    { texto: "Si tienes que manejar un vehículo durante una caída fuerte de ceniza (solo si es estricta emergencia), debes:",
+      opciones: ["Acelerar a fondo para salir rápido de la zona", "Evitar manejar, o hacerlo a muy baja velocidad porque la ceniza hace patinar las llantas", "Prender las luces altas para derretir la ceniza"],
+      correcta: 1,
+      explicacion: "La ceniza es resbaladiza como el hielo y reduce drásticamente la visibilidad. Es preferible no conducir." },
+    { texto: "Antes de salir de casa en una evacuación, si te da tiempo debes:",
+      opciones: ["Bajar los tacos de luz y cerrar llaves de agua y gas", "Dejar la estufa prendida por si vuelves", "Esconder tus pertenencias de valor en el patio"],
+      correcta: 0,
+      explicacion: "Cortar suministros previene incendios o fugas en caso de temblores fuertes asociados a la erupción." },
+    { texto: "¿Qué pasa si se emite la Alerta Roja?",
+      opciones: ["Significa erupción inminente o en curso. Evacuación total inmediata", "El volcán se durmió", "Es momento de hacer turismo en la zona"],
+      correcta: 0,
+      explicacion: "La alerta roja es el nivel máximo, indica que la erupción es inminente o ya empezó; no hay tiempo que perder." }
+  ];
+
+  const PREGUNTAS_POR_RONDA = 10;
+  const TIEMPO_POR_PREGUNTA = 15;
+
+  let preguntasRonda = [];
+  let preguntaActual = 0;
+  let puntaje = 0;
+  let vidas = 3;
+  let racha = 0;
+  let mejorRacha = 0;
+  let correctasTotales = 0;
+  let respondida = false;
+  let tiempoRestante = TIEMPO_POR_PREGUNTA;
+  let intervaloTiempo = null;
+  
+  const elTextoPregunta = document.getElementById('texto-pregunta');
+  const elOpciones = document.getElementById('opciones');
+  const elNumeroPregunta = document.getElementById('numero-pregunta');
+  const elPuntaje = document.getElementById('puntaje');
+  const elRacha = document.getElementById('racha');
+  const elVidas = document.getElementById('vidas');
+  const elPuntosProgreso = document.getElementById('puntos-progreso');
+  const elBarraTiempo = document.getElementById('barra-tiempo');
+  const elRetro = document.getElementById('retro');
+  const elTarjeta = document.getElementById('tarjeta');
+  const btnSiguiente = document.getElementById('btn-siguiente');
+  const pantallaJuego = document.getElementById('pantalla-juego');
+  const pantallaFinal = document.getElementById('pantalla-final');
+  const volcanContainer = document.getElementById('volcan-container');
+
+  let sonidoActivo = true;
+  let audioCtx = null;
+  const btnSonido = document.getElementById('btn-sonido');
+
+  function obtenerAudioCtx() {
+    if (!audioCtx) {
+        try { audioCtx = new (window.AudioContext || window.webkitAudioContext)(); }
+        catch (e) { console.warn("Audio Context no soportado"); }
+    }
+    return audioCtx;
+  }
+  
+  function reproducirTono(frec, duracion, tipo = 'sine', volumen = 0.12) {
+    if (!sonidoActivo || !obtenerAudioCtx()) return;
+    try {
+      const osc = audioCtx.createOscillator();
+      const gain = audioCtx.createGain();
+      osc.type = tipo; osc.frequency.value = frec;
+      gain.gain.setValueAtTime(volumen, audioCtx.currentTime);
+      gain.gain.exponentialRampToValueAtTime(0.001, audioCtx.currentTime + duracion);
+      osc.connect(gain).connect(audioCtx.destination);
+      osc.start(); osc.stop(audioCtx.currentTime + duracion);
+    } catch(e) {}
+  }
+
+  function sFxCorrecto() { reproducirTono(523, 0.1, 'sine'); setTimeout(()=>reproducirTono(659, 0.2, 'sine'), 100); }
+  function sFxIncorrecto() { reproducirTono(180, 0.35, 'sawtooth', 0.22); }
+  function sFxTic() { reproducirTono(900, 0.05, 'square', 0.05); }
+  function sFxVictoria() { [523, 659, 784, 1046, 1318].forEach((f,i)=>setTimeout(()=>reproducirTono(f, 0.25, 'triangle', 0.15), i*140)); }
+  function sFxErupción() {
+    if (!sonidoActivo || !obtenerAudioCtx()) return;
+    try {
+      // Sonido de estallido / rumble grave
+      reproducirTono(80, 0.8, 'sawtooth', 0.3);
+      setTimeout(() => reproducirTono(120, 0.6, 'triangle', 0.2), 200);
+    } catch(e){}
+  }
+
+  btnSonido.addEventListener('click', () => {
+    sonidoActivo = !sonidoActivo;
+    btnSonido.innerHTML = sonidoActivo ? '🔊' : '🔇';
+    if(sonidoActivo) obtenerAudioCtx();
+  });
+
+  function mezclar(array) {
+    const copia = [...array];
+    for (let i = copia.length - 1; i > 0; i--) {
+      const j = Math.floor(Math.random() * (i + 1));
+      [copia[i], copia[j]] = [copia[j], copia[i]];
+    }
+    return copia;
+  }
+
+  function prepararRonda() {
+    const seleccionadas = mezclar(BANCO_PREGUNTAS).slice(0, PREGUNTAS_POR_RONDA);
+    preguntasRonda = seleccionadas.map(p => {
+      const indices = [0, 1, 2];
+      const mezclados = mezclar(indices);
+      return { 
+        texto: p.texto, 
+        opciones: mezclados.map(i => p.opciones[i]), 
+        correcta: mezclados.indexOf(p.correcta), 
+        explicacion: p.explicacion 
+      };
+    });
+  }
+
+  function actualizarVidas(perdioUna) {
+    elVidas.innerHTML = '';
+    for (let i = 0; i < 3; i++) {
+      const span = document.createElement('span');
+      span.className = 'corazon';
+      span.textContent = i < vidas ? '❤️' : '🖤';
+      if (perdioUna && i === vidas) span.classList.add('perdido');
+      elVidas.appendChild(span);
+    }
+  }
+
+  function renderizarProgreso() {
+    elPuntosProgreso.innerHTML = '';
+    preguntasRonda.forEach((_, i) => {
+      const p = document.createElement('div');
+      p.className = 'punto' + (i === preguntaActual ? ' actual' : '');
+      elPuntosProgreso.appendChild(p);
+    });
+  }
+
+  function marcarProgreso(correcta) {
+    elPuntosProgreso.children[preguntaActual].className = 'punto ' + (correcta ? 'correcta' : 'incorrecta');
+  }
+
+  function iniciarTemporizador() {
+    tiempoRestante = TIEMPO_POR_PREGUNTA;
+    actualizarBarra();
+    clearInterval(intervaloTiempo);
+    intervaloTiempo = setInterval(() => {
+      tiempoRestante -= 0.1;
+      if (tiempoRestante <= 4 && Math.floor(tiempoRestante * 10) % 10 === 0 && tiempoRestante > 0) sFxTic();
+      actualizarBarra();
+      if (tiempoRestante <= 0) { clearInterval(intervaloTiempo); manejarTiempoAgotado(); }
+    }, 100);
+  }
+
+  function actualizarBarra() {
+    const pct = Math.max(0, (tiempoRestante / TIEMPO_POR_PREGUNTA) * 100);
+    elBarraTiempo.style.width = pct + '%';
+    elBarraTiempo.className = 'barra-tiempo-interna' + (tiempoRestante <= 4 ? ' critica' : (tiempoRestante <= 8 ? ' media' : ''));
+  }
+
+  function mostrarPregunta() {
+    respondida = false;
+    const p = preguntasRonda[preguntaActual];
+    
+    elTarjeta.classList.remove('oculto-animado');
+    elNumeroPregunta.textContent = `Pregunta ${preguntaActual + 1} de ${preguntasRonda.length}`;
+    elTextoPregunta.textContent = p.texto;
+    elOpciones.innerHTML = '';
+    
+    p.opciones.forEach((opTexto, i) => {
+      const btn = document.createElement('button');
+      btn.className = 'opcion';
+      btn.textContent = opTexto;
+      btn.onclick = () => verificarRespuesta(i);
+      elOpciones.appendChild(btn);
+    });
+
+    elRetro.className = 'retro';
+    btnSiguiente.classList.remove('mostrar');
+    renderizarProgreso();
+    iniciarTemporizador();
+  }
+
+  function dispararErupcionVolcan() {
+    sFxErupción();
+    volcanContainer.classList.add('erupcion', 'sacudir-fuerte');
+    lanzarMagmaExplosion();
+    setTimeout(() => {
+      volcanContainer.classList.remove('erupcion', 'sacudir-fuerte');
+    }, 1200);
+  }
+
+  function verificarRespuesta(idx) {
+    if (respondida) return;
+    respondida = true;
+    clearInterval(intervaloTiempo);
+    
+    const p = preguntasRonda[preguntaActual];
+    const btns = elOpciones.querySelectorAll('.opcion');
+    btns.forEach(b => b.disabled = true);
+    
+    const acierto = (idx === p.correcta);
+    if (acierto) {
+      racha++;
+      mejorRacha = Math.max(mejorRacha, racha);
+      correctasTotales++;
+      let bono = (racha > 1 && racha % 3 === 0) ? 20 : 0;
+      puntaje += 10 + bono;
+      
+      btns[idx].classList.add('correcta');
+      elRetro.innerHTML = `¡Correcto! ${p.explicacion} ${bono ? `<span class="bono-racha">+${bono} (Racha)🔥</span>` : ''}`;
+      elRetro.classList.add('mostrar', 'ok');
+      sFxCorrecto();
+      
+      // ¡Hacer que el volcán explote de alegría por la respuesta correcta!
+      dispararErupcionVolcan();
+      
+      document.getElementById('racha-container').classList.remove('pop');
+      void document.getElementById('racha-container').offsetWidth;
+      document.getElementById('racha-container').classList.add('pop');
+      
+    } else {
+      racha = 0;
+      vidas--;
+      actualizarVidas(true);
+      sFxIncorrecto();
+      elTarjeta.classList.add('temblor');
+      setTimeout(() => elTarjeta.classList.remove('temblor'), 400);
+      
+      btns[idx].classList.add('incorrecta');
+      btns[p.correcta].classList.add('correcta');
+      elRetro.textContent = `Incorrecto. ${p.explicacion}`;
+      elRetro.classList.add('mostrar', 'mal');
+    }
+    
+    elRacha.textContent = racha;
+    elPuntaje.textContent = puntaje;
+    marcarProgreso(acierto);
+    prepararSiguiente();
+  }
+
+  function manejarTiempoAgotado() {
+    if (respondida) return;
+    respondida = true;
+    const p = preguntasRonda[preguntaActual];
+    const btns = elOpciones.querySelectorAll('.opcion');
+    btns.forEach(b => b.disabled = true);
+    btns[p.correcta].classList.add('correcta');
+    
+    racha = 0; vidas--;
+    elRacha.textContent = racha;
+    actualizarVidas(true);
+    sFxIncorrecto();
+    elTarjeta.classList.add('temblor');
+    setTimeout(() => elTarjeta.classList.remove('temblor'), 400);
+    
+    elRetro.textContent = `¡Se acabó el tiempo! ${p.explicacion}`;
+    elRetro.classList.add('mostrar', 'tiempo');
+    marcarProgreso(false);
+    prepararSiguiente();
+  }
+
+  function prepararSiguiente() {
+    btnSiguiente.textContent = (vidas <= 0 || preguntaActual === preguntasRonda.length - 1) ? 'Ver Resultado Final' : 'Siguiente Pregunta';
+    btnSiguiente.classList.add('mostrar');
+  }
+
+  btnSiguiente.addEventListener('click', () => {
+    elTarjeta.classList.add('oculto-animado');
+    setTimeout(() => {
+      if (vidas <= 0) terminarJuego(false);
+      else {
+        preguntaActual++;
+        if (preguntaActual >= preguntasRonda.length) terminarJuego(true);
+        else mostrarPregunta();
+      }
+    }, 300);
+  });
+
+  function terminarJuego(completo) {
+    pantallaJuego.classList.add('oculto');
+    pantallaFinal.classList.remove('oculto');
+    
+    document.getElementById('fin-puntaje').textContent = puntaje;
+    document.getElementById('fin-racha').textContent = mejorRacha;
+    document.getElementById('fin-correctas').textContent = `${correctasTotales}/${preguntasRonda.length}`;
+
+    const t = document.getElementById('titulo-final');
+    const m = document.getElementById('mensaje-final');
+    const e = document.getElementById('emoji-final');
+
+    if (!completo) {
+      e.textContent = '🌋'; t.textContent = '¡Sin vidas!';
+      m.textContent = 'Repasa las rutas de evacuación y el kit de emergencia. ¡El conocimiento salva vidas!';
+    } else if (correctasTotales === preguntasRonda.length) {
+      e.textContent = '🏆'; t.textContent = '¡Preparación Perfecta!';
+      m.textContent = 'Eres un líder en la comunidad. Dominas la gestión del riesgo ante la Alerta Naranja.';
+      sFxVictoria(); lanzarConfeti();
+    } else if (correctasTotales >= preguntasRonda.length * 0.6) {
+      e.textContent = '👏'; t.textContent = '¡Buen Trabajo!';
+      m.textContent = 'Vas por buen camino, recuerda compartir estos saberes con tu familia.';
+      sFxVictoria(); lanzarConfeti();
+    } else {
+      e.textContent = '🎒'; t.textContent = 'Sigue Preparándote';
+      m.textContent = 'Es importante seguir aprendiendo sobre la prevención en nuestro resguardo.';
+    }
+  }
+
+  document.getElementById('btn-reiniciar').addEventListener('click', () => {
+    pantallaFinal.classList.add('oculto');
+    preguntaActual = 0; puntaje = 0; vidas = 3; racha = 0; mejorRacha = 0; correctasTotales = 0;
+    elPuntaje.textContent = 0; elRacha.textContent = 0;
+    actualizarVidas(false);
+    pantallaJuego.classList.remove('oculto');
+    prepararRonda();
+    mostrarPregunta();
+  });
+
+  const cCeniza = document.getElementById('canvas-ceniza');
+  const ctxCeniza = cCeniza.getContext('2d');
+  const cMagma = document.getElementById('canvas-magma');
+  const ctxMagma = cMagma.getContext('2d');
+  const cConfeti = document.getElementById('canvas-confeti');
+  const ctxConfeti = cConfeti.getContext('2d');
+  
+  let cenizas = [], magmas = [], confetis = [], animandoConfeti = false, animandoMagma = false;
+
+  function redimensionar() {
+    cCeniza.width = cMagma.width = cConfeti.width = window.innerWidth;
+    cCeniza.height = cMagma.height = cConfeti.height = window.innerHeight;
+  }
+  window.addEventListener('resize', redimensionar);
+  redimensionar();
+
+  for(let i=0; i<70; i++) cenizas.push({ x: Math.random()*cCeniza.width, y: Math.random()*cCeniza.height, v: Math.random()*1.2 + 0.4, s: Math.random()*3 + 1 });
+  
+  function animarFondo() {
+    ctxCeniza.clearRect(0,0,cCeniza.width,cCeniza.height);
+    ctxCeniza.fillStyle = 'rgba(210,210,210,0.35)';
+    cenizas.forEach(c => {
+      ctxCeniza.beginPath(); ctxCeniza.arc(c.x, c.y, c.s, 0, Math.PI*2); ctxCeniza.fill();
+      c.y += c.v;
+      c.x += Math.sin(c.y/40)*0.4;
+      if (c.y > cCeniza.height) { c.y = -10; c.x = Math.random()*cCeniza.width; }
+    });
+    requestAnimationFrame(animarFondo);
+  }
+  animarFondo();
+
+  function lanzarMagmaExplosion() {
+    const rectVolcan = volcanContainer.getBoundingClientRect();
+    const origenX = rectVolcan.left + rectVolcan.width / 2;
+    const origenY = rectVolcan.top + rectVolcan.height * 0.35;
+
+    for (let i = 0; i < 45; i++) {
+      const angulo = (Math.random() * Math.PI) - Math.PI / 2; // Hacia arriba
+      const velocidad = Math.random() * 14 + 4;
+      magmas.push({
+        x: origenX, y: origenY,
+        vx: Math.cos(angulo) * velocidad,
+        vy: Math.sin(angulo) * velocidad - 4,
+        radio: Math.random() * 6 + 3,
+        color: Math.random() > 0.3 ? '#ff5722' : '#ffea00',
+        alpha: 1.0
+      });
+    }
+
+    if (!animandoMagma) {
+      animandoMagma = true;
+      animarMagmaLoop();
+    }
+  }
+
+  function animarMagmaLoop() {
+    ctxMagma.clearRect(0, 0, cMagma.width, cMagma.height);
+    magmas.forEach(m => {
+      m.x += m.vx;
+      m.y += m.vy;
+      m.vy += 0.4; // Gravedad
+      m.alpha -= 0.02;
+
+      ctxMagma.save();
+      ctxMagma.globalAlpha = Math.max(0, m.alpha);
+      ctxMagma.fillStyle = m.color;
+      ctxMagma.beginPath();
+      ctxMagma.arc(m.x, m.y, m.radio, 0, Math.PI * 2);
+      ctxMagma.fill();
+      ctxMagma.restore();
+    });
+
+    magmas = magmas.filter(m => m.alpha > 0 && m.y < cMagma.height);
+    if (magmas.length > 0) {
+      requestAnimationFrame(animarMagmaLoop);
+    } else {
+      animandoMagma = false;
+      ctxMagma.clearRect(0, 0, cMagma.width, cMagma.height);
+    }
+  }
+
+  const coloresConfeti = ['#FF5722', '#43A047', '#FFB300', '#ffffff'];
+  function lanzarConfeti() {
+    confetis = [];
+    for (let i = 0; i < 150; i++) {
+      confetis.push({
+        x: cConfeti.width/2, y: cConfeti.height/2 + 100,
+        vx: (Math.random() - 0.5) * 22, vy: (Math.random() - 1) * 22 - 6,
+        s: Math.random()*9 + 4, c: coloresConfeti[Math.floor(Math.random()*coloresConfeti.length)],
+        r: Math.random()*360, vr: (Math.random()-0.5)*12
+      });
+    }
+    if (!animandoConfeti) { animandoConfeti = true; animarConfetisLoop(); }
+  }
+
+  function animarConfetisLoop() {
+    ctxConfeti.clearRect(0,0,cConfeti.width,cConfeti.height);
+    confetis.forEach(c => {
+      c.x += c.vx; c.y += c.vy; c.vy += 0.55; c.r += c.vr;
+      ctxConfeti.save(); ctxConfeti.translate(c.x, c.y); ctxConfeti.rotate(c.r*Math.PI/180);
+      ctxConfeti.fillStyle = c.c; ctxConfeti.fillRect(-c.s/2, -c.s/2, c.s, c.s); ctxConfeti.restore();
+    });
+    confetis = confetis.filter(c => c.y < cConfeti.height + 20);
+    if (confetis.length > 0) requestAnimationFrame(animarConfetisLoop);
+    else { animandoConfeti = false; ctxConfeti.clearRect(0,0,cConfeti.width,cConfeti.height); }
+  }
+
+  actualizarVidas(false);
+  prepararRonda();
+  mostrarPregunta();
+</script>
+
+</body>
+</html>
